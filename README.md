@@ -1,76 +1,96 @@
 # ternary-beacon
 
-**"I'm here." Discovery and presence broadcasting for fleet agents.**
+**Discovery and presence protocol for fleet agents**
 
-In a fleet of distributed agents, the first problem is finding each other. An agent starts up, looks around, and... nothing. Who else is out there? What can they do? Where are they?
+[![ternary](https://img.shields.io/badge/ecosystem-ternary-blue)](https://github.com/orgs/SuperInstance/repositories?q=ternary)
+[![tests](https://img.shields.io/badge/tests-27-green)]()
 
-A beacon is the answer. Each agent broadcasts a beacon — a small, regular signal that says "I exist, here's what I can do, here's how to reach me." Other agents listen for beacons and build a map of the fleet. When an agent goes offline, its beacon stops. When a new agent appears, its beacon appears. The beacon stream IS the fleet's membership list.
+## Overview
 
-## What's Inside
+Discovery and presence protocol for fleet agents.
 
-- **`Beacon`** — a presence announcement: agent ID, capabilities, endpoint, timestamp
-- **`BeaconBroadcaster`** — broadcast beacons at regular intervals
-- **`BeaconListener`** — listen for beacons from other agents
-- **`FleetMap`** — the aggregate view of all heard beacons. Who's online, who's stale, who's new
-- **`broadcast(beacon)`** — emit a beacon to the fleet
-- **`listen(timeout)`** — listen for incoming beacons
-- **`is_alive(agent_id, threshold)`** — has this agent's beacon been heard within the threshold?
-- **`fleet_snapshot()`** — current fleet membership with last-seen timestamps
+Inspired by Oracle1's Beacon interconnection layer. Models how agents find
+each other in the fleet: broadcasting presence, scanning for nearby agents,
+maintaining a registry, ternary filtering of beacons, and signal strength
+estimation.
 
-## Quick Example
+## Architecture
 
-```rust
-use ternary_beacon::*;
+- **`AgentId`** — core data structure
+- **`BeaconMessage`** — core data structure
+- **`Beacon`** — core data structure
+- **`DetectedBeacon`** — core data structure
+- **`BeaconScanner`** — core data structure
+- **`BeaconFilter`** — core data structure
+- **`RegistryEntry`** — core data structure
+- **`BeaconRegistry`** — core data structure
+- **`ProtocolMessage`** — core data structure
+- **`Ternary`** — state enumeration
+- **`SignalStrength`** — state enumeration
+- **`FilterCriterion`** — state enumeration
+- **`BeaconOp`** — state enumeration
 
-// Create a beacon for this agent
-let beacon = Beacon::new("oracle2")
-    .capability("predict")
-    .capability("simulate")
-    .endpoint("construct-coordination");
+### Key Functions
 
-// Broadcast it
-broadcast(&beacon);
+- `new()`
+- `with_capability()`
+- `with_metadata()`
+- `has_capability()`
+- `from_raw()`
+- `is_usable()`
+- `new()`
+- `agent_id()`
+- `is_active()`
+- `broadcast_range()`
+- ... and 31 more
 
-// Listen for other agents
-let mut listener = BeaconListener::new();
-let fleet = listener.fleet_snapshot();
-for agent in &fleet.agents {
-    println!("Agent: {}, capabilities: {:?}", agent.id, agent.capabilities);
-}
+## Why Ternary?
 
-// Check if a specific agent is alive
-if is_alive(&fleet, "forgemaster", 60_000) {
-    println!("Forgemaster is online!");
-}
+The balanced ternary system {-1, 0, +1} (also known as Z₃) is the mathematically optimal discrete encoding:
+- **More expressive than binary**: three states capture positive, neutral, and negative
+- **Natural for decisions**: accept/reject/abstain, buy/hold/sell, agree/disagree/neutral
+- **Self-balancing**: the 0 state acts as a universal screen, preventing pathological lock-in
+- **Z₃ cyclic dynamics**: rock-paper-scissors is the only natural coordination mechanism
+
+## Stats
+
+| Metric | Value |
+|--------|-------|
+| Lines of Rust | 772 |
+| Test count | 27 |
+| Public types | 13 |
+| Public functions | 41 |
+
+## Ecosystem
+
+This crate is part of the **[SuperInstance Ternary Fleet](https://github.com/orgs/SuperInstance/repositories?q=ternary)**:
+
+- **[ternary-core](https://github.com/SuperInstance/ternary-core)** — shared traits and Z₃ arithmetic
+- **[ternary-grid](https://github.com/SuperInstance/ternary-grid)** — spatial grid with {-1, 0, +1} cells
+- **[ternary-graph](https://github.com/SuperInstance/ternary-graph)** — ternary-weighted graph algorithms
+- **[ternary-automata](https://github.com/SuperInstance/ternary-automata)** — three-state cellular automata
+- **[ternary-compiler](https://github.com/SuperInstance/ternary-compiler)** — expression compiler and optimizer
+
+200+ crates. 4,300+ tests. One pattern.
+
+## Research Context
+
+The ternary approach connects to several active research areas:
+- **Ternary Neural Networks** (TNNs): weights constrained to {-1, 0, +1} for efficient inference
+- **Huawei's ternary chip**: 7nm ternary silicon with 60% less power consumption
+- **Active inference**: free energy minimization naturally maps to ternary action selection
+- **Cyclic dominance**: RPS dynamics maintain biodiversity in spatial ecology
+- **Z₃ group theory**: the only algebraic group on three elements is cyclic addition mod 3
+
+## Usage
+
+```toml
+[dependencies]
+ternary-beacon = "0.1.0"
 ```
 
-## The Deeper Truth
-
-**Beacons are the fleet's heartbeat.** Each pulse says "I'm still here." The interval between pulses determines how quickly the fleet detects failures: a 60-second beacon means it takes up to 2 minutes to know someone's gone. A 1-second beacon means near-instant detection — but more network traffic. The beacon interval IS the fleet's reaction time.
-
-The CORTEX.json spec (from construct-coordination) is the beacon's payload: not just "I'm here" but "here's everything about me." The beacon broadcasts the CORTEX manifest. The listener collects manifests. The FleetMap is the aggregate CORTEX of the entire fleet — a living document of who exists and what they can do.
-
-**Use cases:**
-- **Service discovery** — find available agents in a distributed fleet
-- **Health monitoring** — detect agent failures via beacon absence
-- **Dynamic routing** — route tasks to agents based on beacon-advertised capabilities
-- **Fleet visualization** — the FleetMap IS the dashboard
-- **Self-organizing systems** — agents that discover each other and self-configure
-
-## See Also
-
-- **ternary-lighthouse** — lighthouses observe; beacons announce
-- **ternary-protocol** — wire protocol for beacon transmission
-- **ternary-room** — rooms are discovered via beacons
-- **ternary-anchor** — anchors maintain what beacons discover
-- **ternary-mesh** — mesh networks built on beacon discovery
-- **ternary-constellation** — constellations are groups discovered via beacons
-- **ternary-observatory** — observatories monitor beacon streams
-
-## Install
-
-```bash
-cargo add ternary-beacon
+```rust
+use ternary_beacon;
 ```
 
 ## License
