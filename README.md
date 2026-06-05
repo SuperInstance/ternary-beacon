@@ -1,97 +1,77 @@
-# ternary-beacon — Discovery and presence protocol for fleet agents
+# ternary-beacon
 
-Agents in a fleet need to find each other. This crate provides beacon broadcasting, scanning, registry management, ternary filtering, and a standard protocol message format. Inspired by Oracle1's Beacon interconnection layer.
+**"I'm here." Discovery and presence broadcasting for fleet agents.**
 
-## Why This Exists
+In a fleet of distributed agents, the first problem is finding each other. An agent starts up, looks around, and... nothing. Who else is out there? What can they do? Where are they?
 
-In a dynamic fleet, agents come and go. Before agents can communicate (channels), dock (harbors), or build structures (reefs), they need to discover each other. Beacon provides the "who's out there?" layer: agents broadcast their presence, scan for neighbors, maintain a registry of known fleet members, and filter discoveries using ternary logic (include, exclude, no opinion).
+A beacon is the answer. Each agent broadcasts a beacon — a small, regular signal that says "I exist, here's what I can do, here's how to reach me." Other agents listen for beacons and build a map of the fleet. When an agent goes offline, its beacon stops. When a new agent appears, its beacon appears. The beacon stream IS the fleet's membership list.
 
-## Core Concepts
+## What's Inside
 
-- **Beacon** — Broadcasts an agent's presence. Carries capabilities, metadata, signal strength, and a timestamp. Can be activated/deactivated (go silent).
-- **BeaconScanner** — Detects nearby beacons within a scan range. Ignores self-detections. Estimates distance from signal strength. Returns results sorted by signal strength (strongest first).
-- **BeaconFilter** — Ternary filtering of beacon messages. Criteria include capability presence/absence, metadata matching, and minimum signal strength. Any Negative criterion rejects the message; Positive criteria boost; Neutral is no opinion.
-- **BeaconRegistry** — Maintains a registry of known fleet members with expiry. Agents that haven't been seen within the expiry window are pruned. Capabilities are merged across sightings.
-- **SignalStrength** — Classifies raw signal values (0-100) into categories: None, Weak, Medium, Strong, Excellent.
-- **BeaconProtocol** — Standard message format with operation types (Announce, Depart, Query, Response) and a protocol version string.
+- **`Beacon`** — a presence announcement: agent ID, capabilities, endpoint, timestamp
+- **`BeaconBroadcaster`** — broadcast beacons at regular intervals
+- **`BeaconListener`** — listen for beacons from other agents
+- **`FleetMap`** — the aggregate view of all heard beacons. Who's online, who's stale, who's new
+- **`broadcast(beacon)`** — emit a beacon to the fleet
+- **`listen(timeout)`** — listen for incoming beacons
+- **`is_alive(agent_id, threshold)`** — has this agent's beacon been heard within the threshold?
+- **`fleet_snapshot()`** — current fleet membership with last-seen timestamps
 
-## Quick Start
-
-```toml
-[dependencies]
-ternary-beacon = "0.1"
-```
+## Quick Example
 
 ```rust
 use ternary_beacon::*;
 
-// Agent 1 broadcasts presence
-let mut beacon = Beacon::new(AgentId(1), 75, 1000);
-beacon.add_capability("compute");
-beacon.set_metadata("region", "us-west");
-let msg = beacon.broadcast(1001);
+// Create a beacon for this agent
+let beacon = Beacon::new("oracle2")
+    .capability("predict")
+    .capability("simulate")
+    .endpoint("construct-coordination");
 
-// Agent 2 scans for neighbors
-let mut scanner = BeaconScanner::new(AgentId(2), 80);
-let detections = scanner.scan(&[msg.clone()]);
-assert_eq!(detections.len(), 1);
+// Broadcast it
+broadcast(&beacon);
 
-// Filter by capability
-let mut filter = BeaconFilter::new();
-filter.add_criterion(FilterCriterion::HasCapability("compute".to_string()));
-let filtered = filter.filter(&[msg.clone()]);
-assert_eq!(filtered.len(), 1);
+// Listen for other agents
+let mut listener = BeaconListener::new();
+let fleet = listener.fleet_snapshot();
+for agent in &fleet.agents {
+    println!("Agent: {}, capabilities: {:?}", agent.id, agent.capabilities);
+}
 
-// Maintain a registry
-let mut registry = BeaconRegistry::new(500); // 500ms expiry
-registry.register(&msg);
-assert!(registry.is_active(AgentId(1), 1100));
+// Check if a specific agent is alive
+if is_alive(&fleet, "forgemaster", 60_000) {
+    println!("Forgemaster is online!");
+}
 ```
 
-## API Overview
+## The Deeper Truth
 
-| Type | Description |
-|------|-------------|
-| `Beacon` | Broadcasts agent presence with capabilities and metadata |
-| `BeaconScanner` | Detects nearby beacons, estimates distance |
-| `BeaconFilter` | Ternary filtering with composable criteria |
-| `FilterCriterion` | Individual filter rules (capability, signal, metadata) |
-| `BeaconRegistry` | Known fleet members with expiry and capability merging |
-| `SignalStrength` | Signal classification (None/Weak/Medium/Strong/Excellent) |
-| `BeaconProtocol` | Standard message format with ops and version |
-| `BeaconMessage` | Core data: source, signal, capabilities, metadata, timestamp |
+**Beacons are the fleet's heartbeat.** Each pulse says "I'm still here." The interval between pulses determines how quickly the fleet detects failures: a 60-second beacon means it takes up to 2 minutes to know someone's gone. A 1-second beacon means near-instant detection — but more network traffic. The beacon interval IS the fleet's reaction time.
 
-## How It Works
+The CORTEX.json spec (from construct-coordination) is the beacon's payload: not just "I'm here" but "here's everything about me." The beacon broadcasts the CORTEX manifest. The listener collects manifests. The FleetMap is the aggregate CORTEX of the entire fleet — a living document of who exists and what they can do.
 
-**Broadcasting:** Each `Beacon` holds a `BeaconMessage` that gets updated on each `broadcast()` call (timestamp refreshed, broadcast count incremented). The message is returned by reference so callers can forward it.
+**Use cases:**
+- **Service discovery** — find available agents in a distributed fleet
+- **Health monitoring** — detect agent failures via beacon absence
+- **Dynamic routing** — route tasks to agents based on beacon-advertised capabilities
+- **Fleet visualization** — the FleetMap IS the dashboard
+- **Self-organizing systems** — agents that discover each other and self-configure
 
-**Scanning:** `BeaconScanner::scan()` takes a slice of beacon messages, filters out self-detections and out-of-range messages, classifies signal strength, estimates distance (inverse of signal), and sorts by signal strength descending.
+## See Also
 
-**Filtering:** `BeaconFilter` composes multiple `FilterCriterion` instances. Each criterion returns a Ternary result. The combined result is Negative if *any* criterion is Negative, Positive if any is Positive (without any Negative), and Neutral otherwise. This is a conservative AND-of-criteria approach.
+- **ternary-lighthouse** — lighthouses observe; beacons announce
+- **ternary-protocol** — wire protocol for beacon transmission
+- **ternary-room** — rooms are discovered via beacons
+- **ternary-anchor** — anchors maintain what beacons discover
+- **ternary-mesh** — mesh networks built on beacon discovery
+- **ternary-constellation** — constellations are groups discovered via beacons
+- **ternary-observatory** — observatories monitor beacon streams
 
-**Registry:** `BeaconRegistry` uses a HashMap keyed by AgentId. Each `register()` call merges capabilities (additive, no removal) and updates the timestamp. `prune()` removes entries whose `last_seen` is beyond the expiry window.
+## Install
 
-**Protocol:** `ProtocolMessage` wraps a `BeaconMessage` with an operation type (Announce, Depart, Query, Response) and protocol version. This provides a standard envelope for fleet-wide communication.
-
-## Known Limitations
-
-- No actual network transport. This is a pure data model. You need to wrap it in your own networking layer.
-- Distance estimation is naive: `100 / signal_strength`. Real-world distance estimation needs calibration and environmental factors.
-- Registry capability merging is additive only — capabilities are never removed even if an agent stops advertising them.
-- No encryption or authentication in the protocol layer. Security must be handled externally.
-- Scanner sorts all results on every scan call — O(n log n). Fine for hundreds of agents, not for millions.
-
-## Use Cases
-
-- **Agent discovery** — New agents broadcast beacons to announce themselves; existing agents scan to find neighbors.
-- **Capability matching** — Filter beacons by capability to find agents that can perform specific tasks.
-- **Fleet roster** — Registry maintains the current fleet membership, automatically expiring stale entries.
-- **Departure notification** — Agents send Depart protocol messages when leaving, allowing clean deregistration.
-- **Proximity estimation** — Signal strength classification enables proximity-based grouping without GPS.
-
-## Ecosystem Context
-
-Part of the SuperInstance ternary fleet ecosystem. This is the discovery layer — agents use beacons before they use `ternary-channel` (messaging), `ternary-harbor` (docking), or `ternary-reef` (collective structures). Beacon messages are typically carried over `ternary-channel` connections.
+```bash
+cargo add ternary-beacon
+```
 
 ## License
 
