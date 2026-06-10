@@ -1,4 +1,5 @@
 [package]
+repository = "https://github.com/SuperInstance/ternary-beacon"
 name = "ternary-beacon"
 version = "0.1.0"
 edition = "2021"
