@@ -6,7 +6,9 @@
 
 Distributed systems need service discovery: new agents must find existing ones, and the fleet must detect when agents join or leave. Ternary Beacon provides this with ternary filtering — agents can positively include (+1), neutrally observe (0), or negatively exclude (-1) discovered peers based on capabilities, signal strength, or custom metadata. This is mDNS/service discovery enhanced with the ternary decision framework.
 
-## How It Work ### Beacon Broadcasting
+## How It Works
+
+### Beacon Broadcasting
 
 Each agent broadcasts a `BeaconMessage`:
 
